@@ -4653,3 +4653,11 @@ fsource
 light
 domestic
 geomagnetic
+torque
+oscillating
+liberty
+torus
+навигаторе
+полезного
+лиан
+растения
