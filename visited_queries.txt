@@ -3275,3 +3275,14 @@ uz
 ўқувчилар
 avtomaktab
 test2
+ushbu
+botdagi
+haqida
+test3
+berib
+boriladi
+test4
+imkoniyatlari
+kanalda
+test1
+kanali
