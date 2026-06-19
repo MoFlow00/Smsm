@@ -2,15 +2,14 @@ name: Run Semagram Scraper
 
 on:
   schedule:
-    # يعمل كل 5 ساعات (دورة 3 ساعات عمل + ساعتين راحة)
     - cron: '0 0,5,10,15,20,23 * * *'
-  workflow_dispatch: # للتشغيل اليدوي وقتما تشاء
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # ضروري جداً للسماح للسكربت بعمل Commit و Push
+      contents: write
       
     steps:
       - name: Checkout code
@@ -22,6 +21,7 @@ jobs:
           python-version: '3.9'
 
       - name: Cache Playwright browsers
+        id: cache-playwright
         uses: actions/cache@v3
         with:
           path: ~/.cache/ms-playwright
@@ -31,9 +31,9 @@ jobs:
         run: |
           pip install playwright tqdm
           playwright install chromium
+        if: steps.cache-playwright.outputs.cache-hit != 'true'
 
       - name: Run Scraper
         run: python test2.py
         env:
-          # في حال احتاج السكريبت لأي متغيرات بيئية لاحقاً
           PYTHONUNBUFFERED: "1"
