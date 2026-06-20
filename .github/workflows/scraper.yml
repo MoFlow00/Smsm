@@ -29,9 +29,11 @@ jobs:
 
       - name: Install dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install playwright tqdm
           playwright install chromium
-        if: steps.cache-playwright.outputs.cache-hit != 'true'
+          # تأكيد تثبيت المكتبات لضمان عدم حدوث ModuleNotFoundError
+          pip list
 
       - name: Run Scraper
         run: python test2.py
