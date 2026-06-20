@@ -6141,3 +6141,13 @@ summer
 back
 ticker
 bsc
+fancy
+fonts
+cursive
+cute
+script
+christmas
+pretty
+calligraphy
+modern
+handwriting
