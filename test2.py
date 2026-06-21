@@ -56,19 +56,23 @@ def save_seen(username):
         f.write(username + "\n")
 
 def git_push_changes():
+    """نسخة محدثة ومستقرة: حفظ، سحب، ثم رفع"""
     try:
         subprocess.run(["git", "config", "--global", "user.name", "github-actions"], check=True)
         subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
-        # سحب التحديثات أولاً لتجنب Reject
-        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=True)
+        
+        # 1. حفظ أي تغييرات محلية فوراً
         subprocess.run(["git", "add", "."], check=True)
-        result = subprocess.run(["git", "diff", "--staged", "--quiet"], capture_output=True)
-        if result.returncode != 0:
-            subprocess.run(["git", "commit", "-m", "Auto-update scraped data"], check=True)
-            subprocess.run(["git", "push", "origin", "main"], check=True)
-            print("Sync complete.")
+        subprocess.run(["git", "commit", "-m", "Auto-save scraped data"], check=False)
+        
+        # 2. سحب أي تغييرات تمت في المستودع قبل الرفع لتجنب الـ Reject
+        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=True)
+        
+        # 3. الرفع
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        print("Successfully synced with GitHub.")
     except Exception as e:
-        print(f"Git push failed: {e}")
+        print(f"Git sync failed: {e}")
 
 async def do_search(page, q):
     token = await page.evaluate(f'grecaptcha.execute("{SITE_KEY}", {{action:"search"}})')
@@ -93,6 +97,7 @@ async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
+        # تقليل استهلاك البيانات والوقت
         await page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "font", "stylesheet"] else route.continue_())
         await page.goto("https://semagram.io/")
         await page.wait_for_function("window.grecaptcha !== undefined")
