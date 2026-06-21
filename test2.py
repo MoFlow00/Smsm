@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 from playwright.async_api import async_playwright
 
+# إعدادات ثابتة
 SITE_KEY = "6LfMkZUsAAAAAPalgTg0oLOFS1z3H6FBgGeMtk4c"
 SEEN_FILE = "seen_usernames.txt"
 QUEUE_FILE = "queue.txt"
@@ -58,11 +59,14 @@ def git_push_changes():
     try:
         subprocess.run(["git", "config", "--global", "user.name", "github-actions"], check=True)
         subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
+        # سحب التحديثات أولاً لتجنب Reject
+        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=True)
         subprocess.run(["git", "add", "."], check=True)
         result = subprocess.run(["git", "diff", "--staged", "--quiet"], capture_output=True)
         if result.returncode != 0:
             subprocess.run(["git", "commit", "-m", "Auto-update scraped data"], check=True)
-            subprocess.run(["git", "push"], check=True)
+            subprocess.run(["git", "push", "origin", "main"], check=True)
+            print("Sync complete.")
     except Exception as e:
         print(f"Git push failed: {e}")
 
@@ -79,7 +83,7 @@ async def do_search(page, q):
 
 async def main():
     global total_collected, session_collected
-    load_data() # تم تعريفها هنا، تأكد أنك تستدعيها داخل main
+    load_data()
     
     if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
     current_csv = os.path.join(DATA_DIR, f"channels_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
@@ -94,13 +98,17 @@ async def main():
         await page.wait_for_function("window.grecaptcha !== undefined")
 
         while queue:
+            # الخروج بعد 3 ساعات
             if time.time() - start_time > 10800: break
             q = queue.pop(0)
             if q in visited_queries: continue
             
             try:
                 data = await do_search(page, q)
+                if not isinstance(data, list): continue
+                
                 for item in data:
+                    if not isinstance(item, dict): continue
                     username = item.get("username")
                     if username and username not in seen_usernames:
                         seen_usernames.add(username)
@@ -109,7 +117,10 @@ async def main():
                             csv.writer(f).writerow([username, item.get("kind"), item.get("name"), item.get("user_count"), (item.get("bio") or "").replace("\n", " ")])
                         session_collected += 1
                         total_collected += 1
+                        
+                        # الرفع كل 500 قناة
                         if session_collected >= 500:
+                            save_queue()
                             git_push_changes()
                             session_collected = 0
                     
