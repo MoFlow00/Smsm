@@ -18,7 +18,6 @@ seen_usernames = set()
 queue = []
 visited_queries = set()
 total_collected = 0
-session_collected = 0
 
 def load_data():
     global seen_usernames, queue, visited_queries
@@ -56,19 +55,16 @@ def save_seen(username):
         f.write(username + "\n")
 
 def git_push_changes():
-    """نسخة محدثة ومستقرة: حفظ، سحب، ثم رفع"""
+    """الرفع النهائي: يتم مرة واحدة فقط في نهاية الجلسة"""
     try:
         subprocess.run(["git", "config", "--global", "user.name", "github-actions"], check=True)
         subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
         
-        # 1. حفظ أي تغييرات محلية فوراً
-        subprocess.run(["git", "add", "."], check=True)
-        subprocess.run(["git", "commit", "-m", "Auto-save scraped data"], check=False)
-        
-        # 2. سحب أي تغييرات تمت في المستودع قبل الرفع لتجنب الـ Reject
+        # Pull عشان نتجنب التعارض
         subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=True)
         
-        # 3. الرفع
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", "Auto-update scraped data at session end"], check=False)
         subprocess.run(["git", "push", "origin", "main"], check=True)
         print("Successfully synced with GitHub.")
     except Exception as e:
@@ -86,7 +82,7 @@ async def do_search(page, q):
     return result
 
 async def main():
-    global total_collected, session_collected
+    global total_collected
     load_data()
     
     if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
@@ -97,13 +93,13 @@ async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
-        # تقليل استهلاك البيانات والوقت
+        # منع الصور لتسريع السحب
         await page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "font", "stylesheet"] else route.continue_())
         await page.goto("https://semagram.io/")
         await page.wait_for_function("window.grecaptcha !== undefined")
 
         while queue:
-            # الخروج بعد 3 ساعات
+            # الخروج بعد 3 ساعات (10800 ثانية)
             if time.time() - start_time > 10800: break
             q = queue.pop(0)
             if q in visited_queries: continue
@@ -120,26 +116,20 @@ async def main():
                         save_seen(username)
                         with open(current_csv, "a", newline="", encoding="utf-8-sig") as f:
                             csv.writer(f).writerow([username, item.get("kind"), item.get("name"), item.get("user_count"), (item.get("bio") or "").replace("\n", " ")])
-                        session_collected += 1
                         total_collected += 1
-                        
-                        # الرفع كل 500 قناة
-                        if session_collected >= 500:
-                            save_queue()
-                            git_push_changes()
-                            session_collected = 0
                     
                     for word in extract_words(item):
                         if word not in visited_queries and word not in queue:
                             queue.append(word)
                 save_visited(q)
             except Exception as e:
-                print(f"Error: {e}")
+                print(f"Error processing {q}: {e}")
                 queue.insert(0, q)
                 await asyncio.sleep(10)
         
         await browser.close()
         save_queue()
+        # الرفع يحدث هنا فقط، لضمان استقرار العملية
         git_push_changes()
 
 if __name__ == "__main__":
