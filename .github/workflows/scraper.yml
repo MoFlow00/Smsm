@@ -3,7 +3,7 @@ name: Run Semagram Scraper
 on:
   schedule:
     # هذا السطر يجعل الـ Workflow يعمل كل 15 دقيقة
-    - cron: '*/15 * * * *'
+    - cron: '0,45,30 * * * *'
   workflow_dispatch:
 
 jobs:
