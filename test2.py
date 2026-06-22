@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 from playwright.async_api import async_playwright
 
+# إعدادات ثابتة
 SITE_KEY = "6LfMkZUsAAAAAPalgTg0oLOFS1z3H6FBgGeMtk4c"
 SEEN_FILE = "seen_usernames.txt"
 QUEUE_FILE = "queue.txt"
@@ -20,7 +21,7 @@ total_collected = 0
 
 def load_data():
     global seen_usernames, queue, visited_queries
-    print("Loading data...")
+    print("--- البدء في تحميل البيانات المحلية ---")
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE, encoding="utf8") as f:
             seen_usernames = set(x.strip() for x in f if x.strip())
@@ -34,7 +35,7 @@ def load_data():
         queue = [chr(i) for i in range(ord('a'), ord('z') + 1)] + \
                 [str(i) for i in range(10)] + ["_"]
         save_queue()
-    print(f"Loaded {len(seen_usernames)} seen usernames and {len(queue)} items in queue.")
+    print(f"تم تحميل {len(seen_usernames)} يوزر سابق و {len(queue)} عنصر في قائمة الانتظار.")
 
 def save_queue():
     with open(QUEUE_FILE, "w", encoding="utf8") as f:
@@ -56,21 +57,29 @@ def save_seen(username):
         f.write(username + "\n")
 
 def git_push_changes():
-    print("Starting sync with GitHub...")
+    print("--- البدء في رفع البيانات إلى GitHub ---")
     try:
         subprocess.run(["git", "config", "--global", "user.name", "github-actions"], check=True)
         subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
-        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=True)
+        
         subprocess.run(["git", "add", "."], check=True)
-        result = subprocess.run(["git", "diff", "--staged", "--quiet"], capture_output=True)
-        if result.returncode != 0:
-            subprocess.run(["git", "commit", "-m", "Auto-update scraped data"], check=False)
-            subprocess.run(["git", "push", "origin", "main"], check=True)
-            print("Successfully pushed to GitHub.")
-        else:
-            print("No changes to push.")
+        # حفظ التغييرات مؤقتاً لتنظيف المسار
+        subprocess.run(["git", "stash"], check=False)
+        
+        print("جاري سحب التحديثات (Pull)...")
+        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=True)
+        
+        print("جاري استعادة التغييرات (Stash Pop)...")
+        subprocess.run(["git", "stash", "pop"], check=False)
+        
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", "Auto-update scraped data"], check=False)
+        
+        print("جاري الرفع (Push)...")
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        print("تم الرفع بنجاح!")
     except Exception as e:
-        print(f"Git sync failed: {e}")
+        print(f"خطأ في عملية الرفع: {e}")
 
 async def do_search(page, q):
     token = await page.evaluate(f"""
@@ -99,7 +108,7 @@ async def main():
     
     if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
     current_csv = os.path.join(DATA_DIR, f"channels_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
-    print(f"Saving new data to: {current_csv}")
+    print(f"سيتم الحفظ في: {current_csv}")
     
     start_time = time.time()
     
@@ -107,13 +116,13 @@ async def main():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         await page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "font", "stylesheet"] else route.continue_())
-        print("Navigating to Semagram...")
+        print("جاري الانتقال إلى Semagram...")
         await page.goto("https://semagram.io/")
         await page.wait_for_function("window.grecaptcha !== undefined")
 
         while queue:
             if time.time() - start_time > 10800: 
-                print("Time limit reached (3h). Stopping...")
+                print("وصلنا للحد الزمني (3 ساعات). جاري إنهاء العملية...")
                 break
             q = queue.pop(0)
             if q in visited_queries: continue
@@ -131,20 +140,20 @@ async def main():
                         with open(current_csv, "a", newline="", encoding="utf-8-sig") as f:
                             csv.writer(f).writerow([username, item.get("kind"), item.get("name"), item.get("user_count"), (item.get("bio") or "").replace("\n", " ")])
                         total_collected += 1
-                        if total_collected % 100 == 0:
-                            print(f"Progress: {total_collected} channels collected.")
+                        if total_collected % 500 == 0:
+                            print(f"تم جمع {total_collected} قناة حتى الآن...")
                     
                     for word in extract_words(item):
                         if word not in visited_queries and word not in queue:
                             queue.append(word)
                 save_visited(q)
             except Exception as e:
-                print(f"Error processing {q}: {e}")
+                print(f"خطأ في البحث عن {q}: {e}")
                 queue.insert(0, q)
                 await asyncio.sleep(10)
         
         await browser.close()
-        print(f"Session finished. Total collected: {total_collected}")
+        print(f"الجلسة انتهت. إجمالي المجموعات: {total_collected}")
         save_queue()
         git_push_changes()
 
