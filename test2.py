@@ -121,7 +121,7 @@ async def main():
         await page.wait_for_function("window.grecaptcha !== undefined")
 
         while queue:
-            if time.time() - start_time > 1800: 
+            if time.time() - start_time > 300: 
                 print("وصلنا للحد الزمني (نصف ساعة). جاري إنهاء العملية...")
                 break
             q = queue.pop(0)
