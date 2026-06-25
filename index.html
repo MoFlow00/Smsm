@@ -3,71 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <title>Telegram Channels Explorer</title>
+
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 </head>
+
 <body>
-    <h2>Telegram Channels Data Explorer</h2>
-    <p id="status">جاري تحميل البيانات من GitHub... يرجى الانتظار.</p>
-    <table id="myTable" class="display" style="width:100%">
-        <thead>
-            <tr>
-                <th>Username</th>
-                <th>Kind</th>
-                <th>Name</th>
-                <th>Users</th>
-                <th>Bio</th>
-            </tr>
-        </thead>
-    </table>
 
-    <script>
-        $(document).ready(function() {
-            const repo = "MoFlow00/Smsm";
-            const folder = "data";
-            
-            // جلب قائمة الملفات
-            $.get(`https://api.github.com/repos/${repo}/contents/${folder}`, function(files) {
-                let allData = [];
-                let filesProcessed = 0;
-                // تصفية الملفات لتشمل الـ CSV فقط
-                const csvFiles = files.filter(f => f.name.endsWith('.csv') && f.name !== 'channels_combined.csv');
+<h2>Telegram Channels Data Explorer</h2>
 
-                if (csvFiles.length === 0) { $("#status").text("لا توجد ملفات بيانات."); return; }
+<p id="status">Loading data from GitHub...</p>
 
-                csvFiles.forEach(file => {
-                    Papa.parse(file.download_url, {
-                        download: true,
-                        header: false, // مهم جداً: الملفات لا تحتوي على عنوان في السطر الأول
-                        complete: function(results) {
-                            // إضافة البيانات للمصفوفة الكبيرة
-                            allData = allData.concat(results.data);
-                            filesProcessed++;
-                            $("#status").text(`تم تحميل ${filesProcessed} من ${csvFiles.length} ملف...`);
-                            
-                            if(filesProcessed === csvFiles.length) {
-                                $("#status").hide();
-                                $('#myTable').DataTable({
-                                    data: allData,
-                                    columns: [
-                                        { title: "Username", data: 0 },
-                                        { title: "Kind", data: 1 },
-                                        { title: "Name", data: 2 },
-                                        { title: "Users", data: 3 },
-                                        { title: "Bio", data: 4 }
-                                    ],
-                                    pageLength: 25 // عدد الصفوف في الصفحة الواحدة
-                                });
-                            }
+<table id="myTable" class="display" style="width:100%">
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Kind</th>
+            <th>Name</th>
+            <th>Users</th>
+            <th>Bio</th>
+        </tr>
+    </thead>
+</table>
+
+<script>
+
+$(function () {
+
+    const repo = "MoFlow00/Smsm";
+    const folder = "data";
+
+    $.get(`https://api.github.com/repos/${repo}/contents/${folder}`)
+
+    .done(function (files) {
+
+        let allData = [];
+
+        const csvFiles = files.filter(file =>
+            file.name.endsWith(".csv") &&
+            file.name !== "channels_combined.csv"
+        );
+
+        if (!csvFiles.length) {
+            $("#status").text("No CSV files found.");
+            return;
+        }
+
+        let remaining = csvFiles.length;
+
+        csvFiles.forEach(file => {
+
+            Papa.parse(file.download_url, {
+
+                download: true,
+
+                header: false,
+
+                skipEmptyLines: true,
+
+                complete: function (results) {
+
+                    const cleaned = results.data.filter(row =>
+                        row &&
+                        row.length &&
+                        row.some(col => String(col).trim() !== "")
+                    );
+
+                    allData.push(...cleaned);
+
+                    remaining--;
+
+                    $("#status").text(
+                        `Loading ${csvFiles.length - remaining}/${csvFiles.length} files...`
+                    );
+
+                    if (remaining === 0) {
+
+                        $("#status").hide();
+
+                        if ($.fn.DataTable.isDataTable("#myTable")) {
+                            $("#myTable").DataTable().clear().destroy();
+                            $("#myTable tbody").empty();
                         }
-                    });
-                });
-            }).fail(function() {
-                $("#status").text("خطأ في الاتصال بـ GitHub API. تأكد من إعدادات المستودع.");
+
+                        $("#myTable").DataTable({
+
+                            data: allData,
+
+                            columns: [
+                                { title: "Username", data: 0 },
+                                { title: "Kind", data: 1 },
+                                { title: "Name", data: 2 },
+                                { title: "Users", data: 3 },
+                                { title: "Bio", data: 4 }
+                            ],
+
+                            processing: true,
+
+                            deferRender: true,
+
+                            stateSave: true,
+
+                            destroy: true,
+
+                            pageLength: 25,
+
+                            order: [[3, "desc"]],
+
+                            autoWidth: false,
+
+                            responsive: true,
+
+                            searchDelay: 300,
+
+                            language: {
+                                processing: "Loading..."
+                            }
+
+                        });
+
+                    }
+
+                }
+
             });
+
         });
-    </script>
+
+    })
+
+    .fail(function () {
+
+        $("#status").text("Failed to connect to GitHub API.");
+
+    });
+
+});
+
+</script>
+
 </body>
 </html>
