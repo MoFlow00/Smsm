@@ -9,6 +9,7 @@
 </head>
 <body>
     <h2>Telegram Channels Data Explorer</h2>
+    <p id="status">جاري تحميل البيانات...</p>
     <table id="myTable" class="display">
         <thead>
             <tr>
@@ -21,27 +22,48 @@
         </thead>
     </table>
 
-<script>
-    $(document).ready(function() {
-        // قائمة بملفاتك (يمكنك تحديثها أو جعل سكربت يولدها)
-        // أو استخدام تقنية لجلب قائمة الملفات من GitHub API
-        const files = ['data/channels_20260625_152249.csv', 'data/channels_...csv']; 
-        
-        let allData = [];
-        let filesProcessed = 0;
+    <script>
+        $(document).ready(function() {
+            // جلب قائمة الملفات من مجلد data في المستودع
+            const repo = "MoFlow00/Smsm";
+            const folder = "data";
+            
+            $.get(`https://api.github.com/repos/${repo}/contents/${folder}`, function(files) {
+                let allData = [];
+                let filesProcessed = 0;
+                const csvFiles = files.filter(f => f.name.endsWith('.csv') && f.name !== 'channels_combined.csv');
 
-        files.forEach(file => {
-            Papa.parse(file, {
-                download: true,
-                header: true,
-                complete: function(results) {
-                    allData = allData.concat(results.data);
-                    filesProcessed++;
-                    if(filesProcessed === files.length) {
-                        $('#myTable').DataTable({ data: allData, ... });
-                    }
-                }
+                if (csvFiles.length === 0) { $("#status").text("لا توجد ملفات بيانات."); return; }
+
+                csvFiles.forEach(file => {
+                    Papa.parse(file.download_url, {
+                        download: true,
+                        header: true,
+                        complete: function(results) {
+                            allData = allData.concat(results.data);
+                            filesProcessed++;
+                            $("#status").text(`تم تحميل ${filesProcessed} من ${csvFiles.length} ملف...`);
+                            
+                            if(filesProcessed === csvFiles.length) {
+                                $("#status").hide();
+                                $('#myTable').DataTable({
+                                    data: allData,
+                                    columns: [
+                                        { data: 'Username' },
+                                        { data: 'Kind' },
+                                        { data: 'Name' },
+                                        { data: 'Users' },
+                                        { data: 'Bio' }
+                                    ]
+                                });
+                            }
+                        }
+                    });
+                });
+            }).fail(function() {
+                $("#status").text("خطأ في الاتصال بـ GitHub API.");
             });
         });
-    });
-</script>
+    </script>
+</body>
+</html>
