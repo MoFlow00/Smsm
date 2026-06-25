@@ -21,26 +21,27 @@
         </thead>
     </table>
 
-    <script>
-        $(document).ready(function() {
-            // ملاحظة: غير المسار لملفاتك الحقيقية
-            Papa.parse('data/channels_combined.csv', {
+<script>
+    $(document).ready(function() {
+        // قائمة بملفاتك (يمكنك تحديثها أو جعل سكربت يولدها)
+        // أو استخدام تقنية لجلب قائمة الملفات من GitHub API
+        const files = ['data/channels_20260625_152249.csv', 'data/channels_...csv']; 
+        
+        let allData = [];
+        let filesProcessed = 0;
+
+        files.forEach(file => {
+            Papa.parse(file, {
                 download: true,
                 header: true,
                 complete: function(results) {
-                    $('#myTable').DataTable({
-                        data: results.data,
-                        columns: [
-                            { data: 'Username' },
-                            { data: 'Kind' },
-                            { data: 'Name' },
-                            { data: 'Users' },
-                            { data: 'Bio' }
-                        ]
-                    });
+                    allData = allData.concat(results.data);
+                    filesProcessed++;
+                    if(filesProcessed === files.length) {
+                        $('#myTable').DataTable({ data: allData, ... });
+                    }
                 }
             });
         });
-    </script>
-</body>
-</html>
+    });
+</script>
