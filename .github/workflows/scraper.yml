@@ -2,7 +2,6 @@ name: Run Semagram Scraper
 
 on:
   schedule:
-    # يعمل كل 45 دقيقة
     - cron: '0,15,30,45 * * * *'
   workflow_dispatch:
 
@@ -40,7 +39,7 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
 
-merge-data:
+  merge-data:
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -57,7 +56,6 @@ merge-data:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
-          # سحب التحديثات أولاً للدمج قبل الرفع
           git pull --rebase origin main
           git add data/channels_combined.csv
           git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-merge CSV files" && git push)
