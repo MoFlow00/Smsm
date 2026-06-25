@@ -2,8 +2,8 @@ name: Run Semagram Scraper
 
 on:
   schedule:
-    # هذا السطر يجعل الـ Workflow يعمل كل 15 دقيقة
-    - cron: '0,45,30 * * * *'
+    # يعمل كل 45 دقيقة
+    - cron: '0,15,30,45 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -33,10 +33,31 @@ jobs:
           python -m pip install --upgrade pip
           pip install playwright tqdm
           playwright install chromium
-          # تأكيد تثبيت المكتبات لضمان عدم حدوث ModuleNotFoundError
           pip list
 
       - name: Run Scraper
         run: python test2.py
         env:
           PYTHONUNBUFFERED: "1"
+
+  merge-data:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Merge CSVs
+        run: |
+          # دمج الملفات مع إزالة التكرار (مع الحفاظ على الهيدر من أول ملف)
+          awk 'FNR==1 && NR!=1{next;}{print}' data/*.csv | sort -u > data/channels_combined.csv
+          
+      - name: Commit and Push combined file
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add data/channels_combined.csv
+          # commit فقط إذا كانت هناك تغييرات
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-merge CSV files" && git push)
