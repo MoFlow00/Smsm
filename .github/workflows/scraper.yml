@@ -40,7 +40,7 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
 
-  merge-data:
+merge-data:
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -51,13 +51,13 @@ jobs:
 
       - name: Merge CSVs
         run: |
-          # دمج الملفات مع إزالة التكرار (مع الحفاظ على الهيدر من أول ملف)
           awk 'FNR==1 && NR!=1{next;}{print}' data/*.csv | sort -u > data/channels_combined.csv
           
       - name: Commit and Push combined file
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
+          # سحب التحديثات أولاً للدمج قبل الرفع
+          git pull --rebase origin main
           git add data/channels_combined.csv
-          # commit فقط إذا كانت هناك تغييرات
           git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-merge CSV files" && git push)
