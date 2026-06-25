@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>Telegram Channels Explorer</title>
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -9,8 +10,8 @@
 </head>
 <body>
     <h2>Telegram Channels Data Explorer</h2>
-    <p id="status">جاري تحميل البيانات...</p>
-    <table id="myTable" class="display">
+    <p id="status">جاري تحميل البيانات من GitHub... يرجى الانتظار.</p>
+    <table id="myTable" class="display" style="width:100%">
         <thead>
             <tr>
                 <th>Username</th>
@@ -24,13 +25,14 @@
 
     <script>
         $(document).ready(function() {
-            // جلب قائمة الملفات من مجلد data في المستودع
             const repo = "MoFlow00/Smsm";
             const folder = "data";
             
+            // جلب قائمة الملفات
             $.get(`https://api.github.com/repos/${repo}/contents/${folder}`, function(files) {
                 let allData = [];
                 let filesProcessed = 0;
+                // تصفية الملفات لتشمل الـ CSV فقط
                 const csvFiles = files.filter(f => f.name.endsWith('.csv') && f.name !== 'channels_combined.csv');
 
                 if (csvFiles.length === 0) { $("#status").text("لا توجد ملفات بيانات."); return; }
@@ -38,8 +40,9 @@
                 csvFiles.forEach(file => {
                     Papa.parse(file.download_url, {
                         download: true,
-                        header: true,
+                        header: false, // مهم جداً: الملفات لا تحتوي على عنوان في السطر الأول
                         complete: function(results) {
+                            // إضافة البيانات للمصفوفة الكبيرة
                             allData = allData.concat(results.data);
                             filesProcessed++;
                             $("#status").text(`تم تحميل ${filesProcessed} من ${csvFiles.length} ملف...`);
@@ -49,19 +52,20 @@
                                 $('#myTable').DataTable({
                                     data: allData,
                                     columns: [
-                                        { data: 'Username' },
-                                        { data: 'Kind' },
-                                        { data: 'Name' },
-                                        { data: 'Users' },
-                                        { data: 'Bio' }
-                                    ]
+                                        { title: "Username", data: 0 },
+                                        { title: "Kind", data: 1 },
+                                        { title: "Name", data: 2 },
+                                        { title: "Users", data: 3 },
+                                        { title: "Bio", data: 4 }
+                                    ],
+                                    pageLength: 25 // عدد الصفوف في الصفحة الواحدة
                                 });
                             }
                         }
                     });
                 });
             }).fail(function() {
-                $("#status").text("خطأ في الاتصال بـ GitHub API.");
+                $("#status").text("خطأ في الاتصال بـ GitHub API. تأكد من إعدادات المستودع.");
             });
         });
     </script>
