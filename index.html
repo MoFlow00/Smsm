@@ -9,13 +9,23 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .progress-bar { width: 100%; height: 20px; background: #f0f0f0; border-radius: 5px; overflow: hidden; margin: 10px 0; }
+        .progress-fill { height: 100%; background: #4CAF50; width: 0%; transition: width 0.3s ease; }
+        #status { font-weight: bold; margin: 10px 0; }
+    </style>
 </head>
 
 <body>
 
 <h2>Telegram Channels Data Explorer</h2>
 
-<p id="status">Loading data from GitHub...</p>
+<div id="status">Loading data from GitHub...</div>
+<div class="progress-bar">
+    <div class="progress-fill" id="progressFill"></div>
+</div>
 
 <table id="myTable" class="display" style="width:100%">
     <thead>
@@ -35,111 +45,139 @@ $(function () {
 
     const repo = "MoFlow00/Smsm";
     const folder = "data";
+    const statusEl = $("#status");
+    const progressFill = $("#progressFill");
+    const CACHE_KEY = "telegram_data_cache";
+    const CACHE_EXPIRY = 3600000; // 1 hour in ms
 
-    $.get(`https://api.github.com/repos/${repo}/contents/${folder}`)
-
-    .done(function (files) {
-
-        let allData = [];
-
-        const csvFiles = files.filter(file =>
-            file.name.endsWith(".csv") &&
-            file.name !== "channels_combined.csv"
-        );
-
-        if (!csvFiles.length) {
-            $("#status").text("No CSV files found.");
-            return;
+    // Check cache first
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+        try {
+            const { data, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < CACHE_EXPIRY) {
+                statusEl.text("Loading from cache...");
+                initializeTable(data);
+                return;
+            }
+        } catch (e) {
+            localStorage.removeItem(CACHE_KEY);
         }
+    }
 
-        let remaining = csvFiles.length;
+    // Fetch file list
+    $.get(`https://api.github.com/repos/${repo}/contents/${folder}`)
+        .done(function (files) {
 
-        csvFiles.forEach(file => {
+            const csvFiles = files.filter(file =>
+                file.name.endsWith(".csv") &&
+                file.name !== "channels_combined.csv"
+            );
 
-            Papa.parse(file.download_url, {
+            if (!csvFiles.length) {
+                statusEl.text("No CSV files found.");
+                return;
+            }
 
-                download: true,
-
-                header: false,
-
-                skipEmptyLines: true,
-
-                complete: function (results) {
-
-                    const cleaned = results.data.filter(row =>
-                        row &&
-                        row.length &&
-                        row.some(col => String(col).trim() !== "")
-                    );
-
-                    allData.push(...cleaned);
-
-                    remaining--;
-
-                    $("#status").text(
-                        `Loading ${csvFiles.length - remaining}/${csvFiles.length} files...`
-                    );
-
-                    if (remaining === 0) {
-
-                        $("#status").hide();
-
-                        if ($.fn.DataTable.isDataTable("#myTable")) {
-                            $("#myTable").DataTable().clear().destroy();
-                            $("#myTable tbody").empty();
-                        }
-
-                        $("#myTable").DataTable({
-
-                            data: allData,
-
-                            columns: [
-                                { title: "Username", data: 0 },
-                                { title: "Kind", data: 1 },
-                                { title: "Name", data: 2 },
-                                { title: "Users", data: 3 },
-                                { title: "Bio", data: 4 }
-                            ],
-
-                            processing: true,
-
-                            deferRender: true,
-
-                            stateSave: true,
-
-                            destroy: true,
-
-                            pageLength: 25,
-
-                            order: [[3, "desc"]],
-
-                            autoWidth: false,
-
-                            responsive: true,
-
-                            searchDelay: 300,
-
-                            language: {
-                                processing: "Loading..."
-                            }
-
-                        });
-
-                    }
-
-                }
-
+            statusEl.text(`Downloading ${csvFiles.length} files...`);
+            
+            // Parallel download all files
+            const downloadPromises = csvFiles.map((file, idx) => {
+                return new Promise((resolve) => {
+                    $.get(file.download_url, function(csvContent) {
+                        progressFill.css("width", ((idx + 1) / csvFiles.length * 50) + "%");
+                        resolve({ file: file.name, content: csvContent });
+                    });
+                });
             });
 
+            Promise.all(downloadPromises)
+                .then(function (csvContents) {
+                    statusEl.text("Parsing CSV data...");
+                    progressFill.css("width", "50%");
+
+                    // Parse all files at once
+                    let allData = [];
+                    let parseCount = 0;
+
+                    csvContents.forEach((item, idx) => {
+                        Papa.parse(item.content, {
+                            header: false,
+                            skipEmptyLines: true,
+                            complete: function (results) {
+                                const cleaned = results.data.filter(row =>
+                                    row &&
+                                    row.length &&
+                                    row.some(col => String(col).trim() !== "")
+                                );
+
+                                allData.push(...cleaned);
+                                parseCount++;
+                                progressFill.css("width", (50 + (parseCount / csvContents.length * 50)) + "%");
+
+                                if (parseCount === csvContents.length) {
+                                    // Cache the data
+                                    try {
+                                        localStorage.setItem(CACHE_KEY, JSON.stringify({
+                                            data: allData,
+                                            timestamp: Date.now()
+                                        }));
+                                    } catch (e) {
+                                        console.warn("Cache storage failed:", e);
+                                    }
+
+                                    initializeTable(allData);
+                                }
+                            }
+                        });
+                    });
+                });
+
+        })
+        .fail(function () {
+            statusEl.text("❌ Failed to connect to GitHub API. Check your internet connection.");
         });
 
-    })
+    function initializeTable(allData) {
+        statusEl.text(`Ready! Loaded ${allData.length} records.`);
+        progressFill.css("width", "100%");
+        
+        setTimeout(() => progressFill.fadeOut(300), 800);
 
-    .fail(function () {
+        // Destroy existing table if it exists
+        if ($.fn.DataTable.isDataTable("#myTable")) {
+            $("#myTable").DataTable().destroy();
+            $("#myTable tbody").empty();
+        }
 
-        $("#status").text("Failed to connect to GitHub API.");
-
-    });
+        // Initialize with optimized settings
+        $("#myTable").DataTable({
+            data: allData,
+            columns: [
+                { data: 0, render: $.fn.dataTable.render.text() },
+                { data: 1, render: $.fn.dataTable.render.text() },
+                { data: 2, render: $.fn.dataTable.render.text() },
+                { data: 3, render: $.fn.dataTable.render.text() },
+                { data: 4, render: $.fn.dataTable.render.text() }
+            ],
+            processing: true,
+            serverSide: false,
+            deferRender: true,
+            stateSave: true,
+            pageLength: 50,
+            order: [[3, "desc"]],
+            autoWidth: false,
+            responsive: true,
+            searchDelay: 400,
+            dom: '<"top"lf>rt<"bottom"ip><"clear">',
+            language: {
+                processing: "Processing...",
+                search: "Search:",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ entries"
+            }
+        });
+    }
 
 });
 
