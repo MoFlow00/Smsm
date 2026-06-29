@@ -55,6 +55,52 @@ def save_seen(username):
     with open(SEEN_FILE, "a", encoding="utf8") as f:
         f.write(username + "\n")
 
+async def do_search(page, q):
+    token = await page.evaluate(f"""
+        async () => {{
+            let retries = 0;
+
+            while (
+                typeof grecaptcha === 'undefined' ||
+                typeof grecaptcha.execute !== 'function'
+            ) {{
+                if (retries > 10)
+                    throw new Error("grecaptcha not found");
+
+                await new Promise(r => setTimeout(r, 1000));
+                retries++;
+            }}
+
+            return await grecaptcha.execute(
+                "{SITE_KEY}",
+                {{ action: "search" }}
+            );
+        }}
+    """)
+
+    result = await page.evaluate("""
+        async ({q, token}) => {
+
+            const r = await fetch(
+                `/api/search?q=${encodeURIComponent(q)}&limit=100`,
+                {
+                    headers: {
+                        "X-Recaptcha-Token": token
+                    }
+                }
+            );
+
+            return await r.json();
+        }
+    """, {
+        "q": q,
+        "token": token
+    })
+
+    return result
+
+
+
 async def main():
     global total_collected
     load_data()
