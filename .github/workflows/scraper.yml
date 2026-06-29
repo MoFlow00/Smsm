@@ -2,16 +2,16 @@ name: Run Semagram Scraper
 
 on:
   schedule:
-    # هذا السطر يجعل الـ Workflow يعمل كل 15 دقيقة
     - cron: '*/15 * * * *'
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -33,10 +33,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install playwright tqdm
           playwright install chromium
-          # تأكيد تثبيت المكتبات لضمان عدم حدوث ModuleNotFoundError
           pip list
 
       - name: Run Scraper
         run: python test2.py
         env:
           PYTHONUNBUFFERED: "1"
+
+      - name: Build Website JSON
+        run: python web/build.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git commit -m "Auto-update scraped data"
+
+          git push
