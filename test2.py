@@ -12,11 +12,14 @@ SEEN_FILE = "seen_usernames.txt"
 QUEUE_FILE = "queue.txt"
 VISITED_FILE = "visited_queries.txt"
 DATA_DIR = "data"
+SESSION_SECONDS = 180
+SEARCH_LIMIT = 100
 
 seen_usernames = set()
 queue = []
 visited_queries = set()
 total_collected = 0
+
 
 def load_data():
     global seen_usernames, queue, visited_queries
@@ -31,29 +34,43 @@ def load_data():
         with open(QUEUE_FILE, encoding="utf8") as f:
             queue = [x.strip() for x in f if x.strip()]
     else:
-        queue = [chr(i) for i in range(ord('a'), ord('z') + 1)] + \
+        queue = [chr(i) for i in range(ord("a"), ord("z") + 1)] + \
                 [str(i) for i in range(10)] + ["_"]
         save_queue()
     print(f"تم تحميل {len(seen_usernames)} يوزر سابق و {len(queue)} عنصر في قائمة الانتظار.")
+
 
 def save_queue():
     with open(QUEUE_FILE, "w", encoding="utf8") as f:
         for q in queue:
             f.write(q + "\n")
 
+
 def save_visited(q):
+    if q in visited_queries:
+        return
+
     with open(VISITED_FILE, "a", encoding="utf8") as f:
         f.write(q + "\n")
     visited_queries.add(q)
 
+
 def extract_words(item):
     text = f"{item.get('username', '')} {item.get('name', '')} {item.get('bio', '')} {item.get('description', '')}"
-    raw_words = re.split(r'[\s_.]+', text.lower())
+    raw_words = re.split(r"[\s_.]+", text.lower())
     return {w for w in raw_words if w.isalnum() and len(w) >= 2}
+
 
 def save_seen(username):
     with open(SEEN_FILE, "a", encoding="utf8") as f:
         f.write(username + "\n")
+
+
+async def block_unneeded_resources(route):
+    if route.request.resource_type in ["image", "font", "stylesheet"]:
+        await route.abort()
+    else:
+        await route.continue_()
 
 
 async def do_search(page, q):
@@ -70,7 +87,7 @@ async def do_search(page, q):
 
                 await new Promise(r => setTimeout(r, 1000));
                 retries++;
-            }
+            }}
 
             return await grecaptcha.execute(
                 "{SITE_KEY}",
@@ -80,10 +97,10 @@ async def do_search(page, q):
     """)
 
     result = await page.evaluate("""
-        async ({q, token}) => {
+        async ({q, token, limit}) => {
 
             const r = await fetch(
-                `/api/search?q=${encodeURIComponent(q)}&limit=100`,
+                `/api/search?q=${encodeURIComponent(q)}&limit=${limit}`,
                 {
                     headers: {
                         "X-Recaptcha-Token": token
@@ -91,12 +108,20 @@ async def do_search(page, q):
                 }
             );
 
+            if (!r.ok) {
+                throw new Error(`search failed: ${r.status} ${r.statusText}`);
+            }
+
             return await r.json();
         }
     """, {
         "q": q,
-        "token": token
+        "token": token,
+        "limit": SEARCH_LIMIT
     })
+
+    if not isinstance(result, list):
+        raise ValueError(f"Unexpected search response for {q!r}: {type(result).__name__}")
 
     return result
 
@@ -122,33 +147,26 @@ async def main():
 
         page = await browser.new_page()
 
-        await page.route(
-            "**/*",
-            lambda route: route.abort()
-            if route.request.resource_type in ["image", "font", "stylesheet"]
-            else route.continue_()
-        )
+        await page.route("**/*", block_unneeded_resources)
 
         print("جاري الانتقال إلى Semagram...")
-        await page.goto("https://semagram.io/")
+        await page.goto("https://semagram.io/", wait_until="domcontentloaded")
         await page.wait_for_function("window.grecaptcha !== undefined")
 
         while queue:
 
-            if time.time() - start_time > 180:
+            if time.time() - start_time > SESSION_SECONDS:
                 print("وصلنا للحد الزمني. إنهاء الجلسة...")
                 break
 
             q = queue.pop(0)
 
             if q in visited_queries:
+                save_queue()
                 continue
 
             try:
                 data = await do_search(page, q)
-
-                if not isinstance(data, list):
-                    continue
 
                 for item in data:
 
@@ -186,6 +204,8 @@ async def main():
                 print(f"خطأ في البحث عن {q}: {e}")
                 queue.insert(0, q)
                 await asyncio.sleep(10)
+            finally:
+                save_queue()
 
         await browser.close()
 
