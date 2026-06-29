@@ -5,7 +5,7 @@ import os
 import shutil
 
 CSV_DIR = "data"
-OUT_DIR = "web/output"
+OUT_DIR = "output"
 
 CHUNK_SIZE = 30000
 
