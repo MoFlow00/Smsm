@@ -131,7 +131,18 @@ async def do_search(page, q):
     })
 
     return result
+def save_seen(username):
+    with open(SEEN_FILE, "a", encoding="utf8") as f:
+        f.write(username + "\n")
 
+
+async def do_search(page, q):
+    ...
+    return result
+
+
+async def main():
+    ...
 
 
 async def main():
