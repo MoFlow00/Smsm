@@ -14,16 +14,18 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: "3.9"
 
       - name: Cache Playwright browsers
-        id: cache-playwright
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium
@@ -36,25 +38,25 @@ jobs:
           pip list
 
       - name: Run Scraper
-        run: python test2.py
         env:
           PYTHONUNBUFFERED: "1"
+        run: python test2.py
 
       - name: Build Website JSON
         run: python web/build.py
 
-      - name: Commit updated data
+      - name: Commit updated files
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add .
 
           if git diff --cached --quiet; then
-            echo "No changes"
+            echo "No changes to commit."
             exit 0
           fi
 
           git commit -m "Auto-update scraped data"
 
-          git push
+          git push origin HEAD
