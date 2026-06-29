@@ -10,7 +10,7 @@ let all=[];
 
 async function start(){
 
-    manifest=await fetch("../output/manifest.json").then(r=>r.json());
+    manifest=await fetch("output/manifest.json").then(r=>r.json());
 
     STATS.innerHTML=`${manifest.total.toLocaleString()} Channels`;
 
@@ -26,7 +26,7 @@ async function loadNext(){
 
     currentPart++;
 
-    const rows=await fetch("../output/"+file).then(r=>r.json());
+    const rows=await fetch("output/"+file).then(r=>r.json());
 
     all.push(...rows);
 
