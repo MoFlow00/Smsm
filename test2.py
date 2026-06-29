@@ -2,7 +2,6 @@ import asyncio
 import csv
 import os
 import re
-import subprocess
 import time
 from datetime import datetime
 from playwright.async_api import async_playwright
@@ -56,106 +55,98 @@ def save_seen(username):
     with open(SEEN_FILE, "a", encoding="utf8") as f:
         f.write(username + "\n")
 
-def git_push_changes():
-    print("--- البدء في رفع البيانات إلى GitHub ---")
-    try:
-        subprocess.run(["git", "config", "--global", "user.name", "github-actions"], check=True)
-        subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
-        
-        subprocess.run(["git", "add", "."], check=True)
-        # حفظ التغييرات مؤقتاً لتنظيف المسار
-        subprocess.run(["git", "stash"], check=False)
-        
-        print("جاري سحب التحديثات (Pull)...")
-        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=True)
-        
-        print("جاري استعادة التغييرات (Stash Pop)...")
-        subprocess.run(["git", "stash", "pop"], check=False)
-        
-        subprocess.run(["git", "add", "."], check=True)
-        subprocess.run(["git", "commit", "-m", "Auto-update scraped data"], check=False)
-        
-        print("جاري الرفع (Push)...")
-        subprocess.run(["git", "push", "origin", "main"], check=True)
-        print("تم الرفع بنجاح!")
-    except Exception as e:
-        print(f"خطأ في عملية الرفع: {e}")
-
-async def do_search(page, q):
-    token = await page.evaluate(f"""
-        async () => {{
-            let retries = 0;
-            while (typeof grecaptcha === 'undefined' || typeof grecaptcha.execute !== 'function') {{
-                if (retries > 10) throw new Error("grecaptcha not found");
-                await new Promise(r => setTimeout(r, 1000));
-                retries++;
-            }}
-            return await grecaptcha.execute("{SITE_KEY}", {{action:"search"}});
-        }}
-    """)
-    result = await page.evaluate("""
-        async ({q, token}) => {
-            const r = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=100`,
-                {headers:{"X-Recaptcha-Token":token}});
-            return await r.json();
-        }
-    """, {"q": q, "token": token})
-    return result
-
 async def main():
     global total_collected
     load_data()
-    
-    if not os.path.exists(DATA_DIR): os.makedirs(DATA_DIR)
-    current_csv = os.path.join(DATA_DIR, f"channels_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
+
+    current_csv = os.path.join(
+        DATA_DIR,
+        f"channels_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    )
+
     print(f"سيتم الحفظ في: {current_csv}")
-    
+
     start_time = time.time()
-    
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
+
         page = await browser.new_page()
-        await page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "font", "stylesheet"] else route.continue_())
+
+        await page.route(
+            "**/*",
+            lambda route: route.abort()
+            if route.request.resource_type in ["image", "font", "stylesheet"]
+            else route.continue_()
+        )
+
         print("جاري الانتقال إلى Semagram...")
         await page.goto("https://semagram.io/")
         await page.wait_for_function("window.grecaptcha !== undefined")
 
         while queue:
-            if time.time() - start_time > 180: 
-                print("وصلنا للحد الزمني (نصف ساعة). جاري إنهاء العملية...")
+
+            if time.time() - start_time > 180:
+                print("وصلنا للحد الزمني. إنهاء الجلسة...")
                 break
+
             q = queue.pop(0)
-            if q in visited_queries: continue
-            
+
+            if q in visited_queries:
+                continue
+
             try:
                 data = await do_search(page, q)
-                if not isinstance(data, list): continue
-                
+
+                if not isinstance(data, list):
+                    continue
+
                 for item in data:
-                    if not isinstance(item, dict): continue
+
+                    if not isinstance(item, dict):
+                        continue
+
                     username = item.get("username")
+
                     if username and username not in seen_usernames:
+
                         seen_usernames.add(username)
                         save_seen(username)
+
                         with open(current_csv, "a", newline="", encoding="utf-8-sig") as f:
-                            csv.writer(f).writerow([username, item.get("kind"), item.get("name"), item.get("user_count"), (item.get("bio") or "").replace("\n", " ")])
+                            csv.writer(f).writerow([
+                                username,
+                                item.get("kind"),
+                                item.get("name"),
+                                item.get("user_count"),
+                                (item.get("bio") or "").replace("\n", " ")
+                            ])
+
                         total_collected += 1
+
                         if total_collected % 500 == 0:
-                            print(f"تم جمع {total_collected} قناة حتى الآن...")
-                    
+                            print(f"تم جمع {total_collected} قناة...")
+
                     for word in extract_words(item):
                         if word not in visited_queries and word not in queue:
                             queue.append(word)
+
                 save_visited(q)
+
             except Exception as e:
                 print(f"خطأ في البحث عن {q}: {e}")
                 queue.insert(0, q)
                 await asyncio.sleep(10)
-        
+
         await browser.close()
-        print(f"الجلسة انتهت. إجمالي المجموعات: {total_collected}")
-        save_queue()
-        git_push_changes()
+
+    print(f"انتهت الجلسة. تم جمع {total_collected} قناة.")
+
+    save_queue()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
