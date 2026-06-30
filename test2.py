@@ -12,7 +12,7 @@ SEEN_FILE = "seen_usernames.txt"
 QUEUE_FILE = "queue.txt"
 VISITED_FILE = "visited_queries.txt"
 DATA_DIR = "data"
-SESSION_SECONDS = 180
+SESSION_SECONDS = 1800
 SEARCH_LIMIT = 100
 
 seen_usernames = set()
