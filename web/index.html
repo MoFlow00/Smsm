@@ -6,6 +6,7 @@
     <title>Telegram Directory</title>
 
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
 </head>
 
 <body>
@@ -16,6 +17,14 @@
 
     <div id="stats">
         Loading...
+    </div>
+
+    <!-- Placeholder for data source information or selection -->
+    <!-- Your app.js can populate this with links to available CSVs, -->
+    <!-- a dropdown to select a CSV, or just display the current data source. -->
+    <div id="data-source-info">
+        <!-- Example: <p>Loading data from: <a href="data/telegram_users.csv">telegram_users.csv</a></p> -->
+        <!-- Example: <select id="csv-selector"></select> -->
     </div>
 
     <input
@@ -33,6 +42,10 @@
 </div>
 
 <script src="app.js"></script>
+
+<footer>
+    <p>Powered by <a href="https://github.com/YOUR_USERNAME/YOUR_REPO_NAME" target="_blank">GitHub Pages</a></p>
+</footer>
 
 </body>
 </html>
