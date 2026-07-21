@@ -3,28 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>دليل قنوات التليجرام</title>
-    <!-- DataTables & Bootstrap CSS -->
+    <title>Telegram Channels Directory</title>
+    <!-- DataTables & Bootstrap 5 CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <style>
-        body { padding: 20px; background-color: #f8f9fa; }
+        body { padding: 20px; background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
         .bio-cell { max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .badge-type { text-transform: capitalize; }
     </style>
 </head>
 <body>
 
 <div class="container-fluid">
-    <h2 class="mb-4 text-center">دليل قنوات Telegram</h2>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>دليل قنوات التليجرام</h2>
+        <span id="status" class="badge bg-info text-dark">جاري تحميل البيانات...</span>
+    </div>
     
     <div class="card shadow-sm p-3">
         <table id="telegramTable" class="table table-striped table-hover w-100">
             <thead>
                 <tr>
                     <th>Username</th>
-                    <th>Kind</th>
+                    <th>Type</th>
                     <th>Name</th>
-                    <th>User Count</th>
+                    <th>Followers</th>
                     <th>Bio</th>
                 </tr>
             </thead>
@@ -33,38 +37,42 @@
     </div>
 </div>
 
-<!-- Scripts -->
+<!-- JS Dependencies -->
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 
 <script>
-// اكتب هنا قائمة ملفات الـ CSV الموجودة في مجلد csvs
-const csvFiles = [
-    "csvs/channels_1.csv",
-    "csvs/channels_2.csv"
-];
-
-async function loadAllCSVs() {
+async function loadAllJSON() {
     let allData = [];
+    let fileIndex = 1;
+    let keepFetching = true;
 
-    for (const file of csvFiles) {
+    // جلب ملفات part_xxxx.json متتالية تلقائياً حتى انتهاء الملفات
+    while (keepFetching) {
+        const paddedIndex = String(fileIndex).padStart(4, '0');
+        const filePath = `output/part_${paddedIndex}.json`;
+
         try {
-            const response = await fetch(file);
-            const csvText = await response.text();
-            
-            const parsed = Papa.parse(csvText, {
-                header: false,
-                skipEmptyLines: true
-            });
-
-            allData = allData.concat(parsed.data);
+            const response = await fetch(filePath);
+            if (!response.ok) {
+                keepFetching = false;
+                break;
+            }
+            const data = await response.json();
+            if (Array.isArray(data) && data.length > 0) {
+                allData = allData.concat(data);
+                fileIndex++;
+            } else {
+                keepFetching = false;
+            }
         } catch (err) {
-            console.error("خطأ في قراءة الملف:", file, err);
+            keepFetching = false;
         }
     }
 
+    document.getElementById('status').innerText = `إجمالي النتائج: ${allData.length}`;
+    document.getElementById('status').className = "badge bg-success";
     renderTable(allData);
 }
 
@@ -73,28 +81,39 @@ function renderTable(data) {
         data: data,
         columns: [
             { 
-                title: "Username", 
+                data: "username",
                 render: function(data) {
-                    if (!data) return '';
+                    if (!data) return '-';
                     const handle = data.replace('@', '');
-                    return `<a href="https://t.me/${handle}" target="_blank">@${handle}</a>`;
+                    return `<a href="https://t.me/${handle}" target="_blank" class="fw-bold text-decoration-none">@${handle}</a>`;
                 }
             },
-            { title: "Kind" },
-            { title: "Name" },
             { 
-                title: "User Count",
+                data: "type",
+                render: function(data) {
+                    const type = data || 'channel';
+                    const badgeClass = type === 'channel' ? 'bg-primary' : 'bg-secondary';
+                    return `<span class="badge ${badgeClass} badge-type">${type}</span>`;
+                }
+            },
+            { data: "name", defaultContent: "-" },
+            { 
+                data: "followers",
+                defaultContent: 0,
                 render: $.fn.dataTable.render.number(',', '.', 0)
             },
             { 
-                title: "Bio", 
+                data: "bio", 
                 className: "bio-cell",
+                defaultContent: "",
                 render: function(data) {
-                    return data ? `<span title="${data}">${data}</span>` : '';
+                    if (!data) return '-';
+                    const cleanBio = data.replace(/\n/g, ' ');
+                    return `<span title="${cleanBio}">${cleanBio}</span>`;
                 }
             }
         ],
-        order: [[3, 'desc']], // ترتيب تنازلي حسب عدد المشتركين
+        order: [[3, 'desc']], // ترتيب تنازلي حسب عدد المتابعين (followers)
         pageLength: 25,
         language: {
             url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/ar.json'
@@ -103,7 +122,7 @@ function renderTable(data) {
 }
 
 $(document.body).ready(function() {
-    loadAllCSVs();
+    loadAllJSON();
 });
 </script>
 </body>
