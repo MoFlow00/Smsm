@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دليل قنوات التليجرام</title>
+    <!-- DataTables & Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <style>
+        body { padding: 20px; background-color: #f8f9fa; }
+        .bio-cell { max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <h2 class="mb-4 text-center">دليل قنوات Telegram</h2>
+    
+    <div class="card shadow-sm p-3">
+        <table id="telegramTable" class="table table-striped table-hover w-100">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Kind</th>
+                    <th>Name</th>
+                    <th>User Count</th>
+                    <th>Bio</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+// اكتب هنا قائمة ملفات الـ CSV الموجودة في مجلد csvs
+const csvFiles = [
+    "csvs/channels_1.csv",
+    "csvs/channels_2.csv"
+];
+
+async function loadAllCSVs() {
+    let allData = [];
+
+    for (const file of csvFiles) {
+        try {
+            const response = await fetch(file);
+            const csvText = await response.text();
+            
+            const parsed = Papa.parse(csvText, {
+                header: false,
+                skipEmptyLines: true
+            });
+
+            allData = allData.concat(parsed.data);
+        } catch (err) {
+            console.error("خطأ في قراءة الملف:", file, err);
+        }
+    }
+
+    renderTable(allData);
+}
+
+function renderTable(data) {
+    $('#telegramTable').DataTable({
+        data: data,
+        columns: [
+            { 
+                title: "Username", 
+                render: function(data) {
+                    if (!data) return '';
+                    const handle = data.replace('@', '');
+                    return `<a href="https://t.me/${handle}" target="_blank">@${handle}</a>`;
+                }
+            },
+            { title: "Kind" },
+            { title: "Name" },
+            { 
+                title: "User Count",
+                render: $.fn.dataTable.render.number(',', '.', 0)
+            },
+            { 
+                title: "Bio", 
+                className: "bio-cell",
+                render: function(data) {
+                    return data ? `<span title="${data}">${data}</span>` : '';
+                }
+            }
+        ],
+        order: [[3, 'desc']], // ترتيب تنازلي حسب عدد المشتركين
+        pageLength: 25,
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/ar.json'
+        }
+    });
+}
+
+$(document.body).ready(function() {
+    loadAllCSVs();
+});
+</script>
+</body>
+</html>
